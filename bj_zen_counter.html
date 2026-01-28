@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>BJ Zen Counter (Class Input)</title>
+  <style>
+    :root { --pad: 12px; --gap: 10px; }
+    body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif; margin:0; background:#0b0f14; color:#e8eef6; }
+    header { padding:14px 16px; background:#0f1722; border-bottom:1px solid #1c2a3a; position:sticky; top:0; z-index:10; }
+    header h1 { margin:0; font-size:16px; font-weight:800; letter-spacing:.2px; }
+    main { padding:14px 12px 90px; max-width:860px; margin:0 auto; display:grid; gap:10px; }
+    .card { background:#0f1722; border:1px solid #1c2a3a; border-radius:14px; padding:var(--pad); }
+    .row { display:flex; gap:var(--gap); flex-wrap:wrap; align-items:center; }
+    .col { flex:1 1 220px; }
+    .kpi { display:flex; gap:10px; flex-wrap:wrap; }
+    .kpi .box { flex:1 1 150px; background:#0b121c; border:1px solid #1c2a3a; border-radius:12px; padding:10px; }
+    .kpi .label { font-size:12px; color:#9db2cc; }
+    .kpi .val { font-size:20px; font-weight:900; margin-top:4px; }
+    input, textarea { width:100%; padding:10px; border-radius:10px; border:1px solid #243449; background:#0b121c; color:#e8eef6; font-size:14px; box-sizing:border-box; }
+    textarea { min-height:92px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace; }
+    button { border:1px solid #243449; background:#0b121c; color:#e8eef6; padding:10px 12px; border-radius:12px; font-weight:900; font-size:14px; }
+    button:active { transform:translateY(1px); }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#0b121c; border:1px solid #243449; font-size:12px; color:#9db2cc; }
+    .muted { color:#9db2cc; font-size:12px; }
+    .warn { color:#ffd08a; }
+    .danger { color:#ff9aa2; }
+    footer { position:fixed; bottom:0; left:0; right:0; background:#0f1722; border-top:1px solid #1c2a3a; padding:10px 12px; }
+    footer .row { justify-content:space-between; }
+
+    /* Count input buttons */
+    .countbar { display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin-top:10px; }
+    .countbar button { padding:16px 0; font-size:18px; }
+    .countbar .wide { grid-column: span 5; padding:10px 0; font-size:14px; }
+
+    .legend { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px; }
+    .legend .item { background:#0b121c; border:1px solid #1c2a3a; border-radius:12px; padding:10px; }
+    .legend .item b { display:block; font-size:14px; margin-bottom:2px; }
+    .legend code { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>BJ Zen Counter（階級入力 / Zen固定）</h1>
+</header>
+
+<main>
+  <section class="card">
+    <div class="kpi">
+      <div class="box">
+        <div class="label">RC（Running Count）</div>
+        <div class="val" id="rc">0</div>
+      </div>
+      <div class="box">
+        <div class="label">TC（True Count）</div>
+        <div class="val" id="tc">0.00</div>
+      </div>
+      <div class="box">
+        <div class="label">推奨ベット</div>
+        <div class="val" id="recBet">0</div>
+        <div class="muted" id="recBetNote"></div>
+      </div>
+      <div class="box">
+        <div class="label">所持金（Bankroll）</div>
+        <div class="val" id="bankroll">0</div>
+        <div class="muted" id="bankrollNote"></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="pill">Zen固定</span>
+      <span class="pill" id="shoeInfo">Shoe: 8 decks</span>
+      <span class="pill" id="penInfo">Pen: 0.0%</span>
+      <span class="pill" id="remInfo">Remain: 416 cards</span>
+      <span class="pill warn" id="cutWarn" style="display:none">Cut近い</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div class="col">
+        <label class="muted">デック数</label>
+        <input id="decks" type="number" min="1" max="12" step="1" />
+      </div>
+      <div class="col">
+        <label class="muted">カット位置（penetration % で警告）</label>
+        <input id="cutPct" type="number" min="1" max="95" step="1" />
+        <div class="muted">例：60（= 60%消化で警告）</div>
+      </div>
+      <div class="col">
+        <label class="muted">リセット</label>
+        <button id="resetShoe" style="width:100%">Shoe Reset</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="muted">カウント入力（1タップ=1枚扱い）</div>
+    <div class="countbar">
+      <button data-d="+2">+2</button>
+      <button data-d="+1">+1</button>
+      <button data-d="0">0</button>
+      <button data-d="-1">-1</button>
+      <button data-d="-2">-2</button>
+
+      <button id="undo" class="wide">Undo（1枚戻す）</button>
+    </div>
+
+    <div class="legend">
+      <div class="item"><b>+2</b><span class="muted"><code>4,5,6</code></span></div>
+      <div class="item"><b>+1</b><span class="muted"><code>2,3,7</code></span></div>
+      <div class="item"><b>0</b><span class="muted"><code>8,9</code></span></div>
+      <div class="item"><b>-2</b><span class="muted"><code>10,J,Q,K</code></span></div>
+      <div class="item" style="grid-column: span 2;"><b>-1</b><span class="muted"><code>A</code></span></div>
+    </div>
+
+    <div class="muted" style="margin-top:8px">
+      履歴：<span id="histCount">0</span>枚（最大500保持）
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div class="col">
+        <label class="muted">最低賭け（Min Bet）</label>
+        <input id="minBet" type="number" min="1" step="1" />
+      </div>
+      <div class="col">
+        <label class="muted">所持金（初期/現在）</label>
+        <input id="initBankroll" type="number" min="0" step="1" />
+      </div>
+      <div class="col">
+        <label class="muted">反映</label>
+        <button id="applyInit" style="width:100%">設定を反映</button>
+      </div>
+    </div>
+
+    <hr style="border:none;border-top:1px solid #1c2a3a;margin:12px 0">
+
+    <div class="row">
+      <div class="col">
+        <label class="muted">今回の賭け額</label>
+        <input id="betAmt" type="number" min="1" step="1" />
+        <div class="muted">推奨ベット（数値）をタップで自動入力</div>
+      </div>
+      <div class="col">
+        <label class="muted">結果を反映（賭け額ベース）</label>
+        <div class="row">
+          <button id="lose">Lose</button>
+          <button id="push">Push</button>
+          <button id="win">Win</button>
+          <button id="bj">BJ(3:2)</button>
+        </div>
+      </div>
+      <div class="col">
+        <label class="muted">カスタム差額（±）</label>
+        <input id="customDelta" type="number" step="1" placeholder="例：+200 / -300" />
+        <button id="applyCustom" style="width:100%; margin-top:8px;">適用</button>
+      </div>
+    </div>
+
+    <div class="muted" style="margin-top:10px" id="lastResult">最終反映：なし</div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div class="col">
+        <label class="muted">ベットランプ（TC → 倍率）</label>
+        <textarea id="ramp"></textarea>
+        <div class="muted">書式：<span class="pill">TC=倍率</span>（例：2=4 → TC2でMin×4）</div>
+        <div class="muted">※内部ではTCは <b>floor</b>（切り捨て）で判定</div>
+      </div>
+      <div class="col">
+        <label class="muted">Bankroll上限（推奨ベット最大）</label>
+        <input id="capPct" type="number" min="1" max="50" step="1" />
+        <div class="muted">例：5 → 所持金の5%を超えない</div>
+
+        <div style="height:10px"></div>
+
+        <button id="saveRamp" style="width:100%">ランプ保存</button>
+        <button id="resetDefaults" style="width:100%; margin-top:8px;">初期値に戻す</button>
+
+        <div class="muted" style="margin-top:10px">
+          推奨ベット = min(<span class="pill">Min×倍率</span>, <span class="pill">所持金×cap%</span>, <span class="pill">所持金</span>)<br>
+          ただし最低 <span class="pill">Min</span> は維持
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="row">
+    <div class="muted" style="font-size:12px;">Chromeの「ホーム画面に追加」でアプリ化OK</div>
+    <button id="wipe" class="danger">全データ消去</button>
+  </div>
+</footer>
+
+<script>
+  const LS_KEY = "bj_zen_class_counter_v1";
+
+  const el = (id) => document.getElementById(id);
+
+  const state = {
+    decks: 8,
+    cutPct: 60,
+    rc: 0,
+    seen: 0,
+    hist: [],          // store deltas as numbers
+    minBet: 1,
+    bankroll: 100,
+    capPct: 5,
+    ramp: {
+      "-999": 1, // fallback (TC<=0)
+      "1": 2,
+      "2": 4,
+      "3": 6,
+      "4": 8,
+      "5": 12
+    },
+    lastResult: ""
+  };
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      Object.assign(state, obj);
+      if (!Array.isArray(state.hist)) state.hist = [];
+    } catch (_) {}
+  }
+
+  function save() {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  }
+
+  function clampInt(n, min, max) {
+    n = Math.floor(Number(n));
+    if (!Number.isFinite(n)) n = min;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function fmtMoney(n) {
+    n = Math.round(Number(n));
+    return (Number.isFinite(n) ? n : 0).toLocaleString("ja-JP");
+  }
+
+  function totalCards() { return state.decks * 52; }
+  function remainingCards() { return Math.max(0, totalCards() - state.seen); }
+  function remainingDecks() { return remainingCards() / 52; }
+
+  function trueCount() {
+    const rd = Math.max(remainingDecks(), 0.25); // avoid blow-up near end
+    return state.rc / rd;
+  }
+
+  function penetrationPct() {
+    const t = totalCards();
+    return t ? (state.seen / t) * 100 : 0;
+  }
+
+  // --- Count input: each tap = 1 card seen ---
+  function addDelta(delta) {
+    delta = Number(delta);
+    if (!Number.isFinite(delta)) return;
+    if (state.seen >= totalCards()) return;
+
+    state.rc += delta;
+    state.seen += 1;
+    state.hist.push(delta);
+    if (state.hist.length > 500) state.hist = state.hist.slice(-500);
+    save();
+    render();
+  }
+
+  function undo() {
+    if (!state.hist.length) return;
+    const d = state.hist.pop();
+    state.rc -= d;
+    state.seen = Math.max(0, state.seen - 1);
+    save();
+    render();
+  }
+
+  function resetShoe() {
+    state.rc = 0;
+    state.seen = 0;
+    state.hist = [];
+    state.lastResult = "Shoe reset";
+    save();
+    render();
+  }
+
+  function parseRampText(txt) {
+    const lines = txt.split("\n").map(s => s.trim()).filter(Boolean);
+    const map = {};
+    for (const line of lines) {
+      const m = line.match(/^(-?\d+)\s*[:=]\s*(\d+(\.\d+)?)$/);
+      if (!m) continue;
+      map[m[1]] = Number(m[2]);
+    }
+    if (!map["-999"]) map["-999"] = 1;
+    return map;
+  }
+
+  function rampToText(map) {
+    const keys = Object.keys(map).map(k => Number(k)).filter(Number.isFinite);
+    keys.sort((a,b)=>a-b);
+    return keys.map(k => `${k}=${map[String(k)]}`).join("\n");
+  }
+
+  function getMultiplier(tc) {
+    const tci = Math.floor(tc);
+    let bestKey = -999;
+    for (const k of Object.keys(state.ramp)) {
+      const kn = Number(k);
+      if (!Number.isFinite(kn)) continue;
+      if (kn <= tci && kn > bestKey) bestKey = kn;
+    }
+    return Number(state.ramp[String(bestKey)] ?? 1);
+  }
+
+  function recommendedBet() {
+    const tc = trueCount();
+    const mult = getMultiplier(tc);
+    const raw = state.minBet * mult;
+
+    const cap = Math.max(1, Math.floor(state.bankroll * (state.capPct / 100)));
+    const rec = Math.max(state.minBet, Math.min(raw, cap, state.bankroll));
+    return { rec, raw, cap, mult, tc };
+  }
+
+  function applyInit() {
+    const mb = clampInt(el("minBet").value, 1, 1_000_000_000);
+    const br = clampInt(el("initBankroll").value, 0, 1_000_000_000);
+    state.minBet = mb;
+    state.bankroll = br;
+    state.lastResult = `設定反映：Min=${mb}, Bankroll=${br}`;
+    save();
+    render();
+  }
+
+  function applyResult(kind) {
+    const bet = clampInt(el("betAmt").value, 1, 1_000_000_000);
+    let delta = 0;
+    if (kind === "lose") delta = -bet;
+    if (kind === "push") delta = 0;
+    if (kind === "win") delta = bet;
+    if (kind === "bj") delta = Math.round(bet * 1.5);
+
+    state.bankroll = Math.max(0, state.bankroll + delta);
+    state.lastResult = `結果反映：${kind.toUpperCase()} / Bet=${bet} / Δ=${delta>=0?"+":""}${delta} / Bankroll=${state.bankroll}`;
+    save();
+    render();
+  }
+
+  function applyCustomDelta() {
+    const d = Number(el("customDelta").value);
+    if (!Number.isFinite(d) || d === 0) return;
+    const dd = Math.round(d);
+    state.bankroll = Math.max(0, state.bankroll + dd);
+    state.lastResult = `カスタム反映：Δ=${dd>=0?"+":""}${dd} / Bankroll=${state.bankroll}`;
+    el("customDelta").value = "";
+    save();
+    render();
+  }
+
+  function render() {
+    // inputs
+    el("decks").value = state.decks;
+    el("cutPct").value = state.cutPct;
+    el("minBet").value = state.minBet;
+    el("initBankroll").value = state.bankroll;
+    el("capPct").value = state.capPct;
+    el("ramp").value = rampToText(state.ramp);
+
+    // KPIs
+    el("rc").textContent = state.rc;
+    const tc = trueCount();
+    el("tc").textContent = tc.toFixed(2);
+
+    const { rec, raw, cap, mult } = recommendedBet();
+    el("recBet").textContent = fmtMoney(rec);
+    el("recBetNote").textContent = `Min×${mult}=${fmtMoney(raw)} / cap=${fmtMoney(cap)}`;
+
+    el("bankroll").textContent = fmtMoney(state.bankroll);
+    el("bankrollNote").textContent = `Min=${fmtMoney(state.minBet)} / cap=${state.capPct}%`;
+
+    // shoe info
+    const pen = penetrationPct();
+    el("shoeInfo").textContent = `Shoe: ${state.decks} decks`;
+    el("penInfo").textContent = `Pen: ${pen.toFixed(1)}%`;
+    el("remInfo").textContent = `Remain: ${remainingCards()} cards`;
+
+    const cutWarn = el("cutWarn");
+    cutWarn.style.display = (pen >= state.cutPct) ? "inline-block" : "none";
+
+    el("histCount").textContent = state.hist.length;
+    el("lastResult").textContent = `最終反映：${state.lastResult || "なし"}`;
+  }
+
+  function bind() {
+    // count buttons
+    document.querySelectorAll("button[data-d]").forEach(btn => {
+      btn.addEventListener("click", () => addDelta(btn.getAttribute("data-d")));
+    });
+
+    el("undo").addEventListener("click", undo);
+
+    el("resetShoe").addEventListener("click", () => {
+      if (confirm("Shoeをリセットしますか？（RC/履歴/消化枚数が0）")) resetShoe();
+    });
+
+    el("applyInit").addEventListener("click", applyInit);
+
+    el("lose").addEventListener("click", () => applyResult("lose"));
+    el("push").addEventListener("click", () => applyResult("push"));
+    el("win").addEventListener("click", () => applyResult("win"));
+    el("bj").addEventListener("click", () => applyResult("bj"));
+
+    el("applyCustom").addEventListener("click", applyCustomDelta);
+
+    // tap recommended bet to fill bet amount
+    el("recBet").addEventListener("click", () => {
+      const { rec } = recommendedBet();
+      el("betAmt").value = rec;
+    });
+
+    el("saveRamp").addEventListener("click", () => {
+      state.ramp = parseRampText(el("ramp").value);
+      state.lastResult = "ランプを保存しました";
+      save();
+      render();
+    });
+
+    el("resetDefaults").addEventListener("click", () => {
+      state.ramp = { "-999": 1, "1": 2, "2": 4, "3": 6, "4": 8, "5": 12 };
+      state.capPct = 5;
+      state.cutPct = 60;
+      state.lastResult = "初期値に戻しました";
+      save();
+      render();
+    });
+
+    el("decks").addEventListener("change", () => {
+      state.decks = clampInt(el("decks").value, 1, 12);
+      save(); render();
+    });
+
+    el("cutPct").addEventListener("change", () => {
+      state.cutPct = clampInt(el("cutPct").value, 1, 95);
+      save(); render();
+    });
+
+    el("minBet").addEventListener("change", () => {
+      state.minBet = clampInt(el("minBet").value, 1, 1_000_000_000);
+      save(); render();
+    });
+
+    el("capPct").addEventListener("change", () => {
+      state.capPct = clampInt(el("capPct").value, 1, 50);
+      save(); render();
+    });
+
+    el("wipe").addEventListener("click", () => {
+      if (!confirm("本当に全データ（設定/履歴/所持金）を消去しますか？")) return;
+      localStorage.removeItem(LS_KEY);
+      location.reload();
+    });
+  }
+
+  // init
+  load();
+  // sanitize
+  state.decks = clampInt(state.decks, 1, 12);
+  state.cutPct = clampInt(state.cutPct, 1, 95);
+  state.minBet = clampInt(state.minBet, 1, 1_000_000_000);
+  state.bankroll = clampInt(state.bankroll, 0, 1_000_000_000);
+  state.capPct = clampInt(state.capPct, 1, 50);
+  if (!state.ramp || typeof state.ramp !== "object") state.ramp = { "-999":1, "1":2, "2":4, "3":6, "4":8, "5":12 };
+  if (!Array.isArray(state.hist)) state.hist = [];
+
+  bind();
+  render();
+</script>
+</body>
+</html>
