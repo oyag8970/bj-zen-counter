@@ -76,6 +76,18 @@
   </section>
 
   <section class="card">
+    <div class="muted">カウント入力（1タップ=1枚扱い）</div>
+    <div class="countbar">
+      <button data-d="+2">+2</button>
+      <button data-d="+1">+1</button>
+      <button data-d="0">0</button>
+      <button data-d="-1">-1</button>
+      <button data-d="-2">-2</button>
+
+      <button id="undo" class="wide">Undo（1枚戻す）</button>
+    </div>
+
+    <section class="card">
     <div class="row">
       <div class="col">
         <label class="muted">デック数</label>
@@ -92,19 +104,7 @@
       </div>
     </div>
   </section>
-
-  <section class="card">
-    <div class="muted">カウント入力（1タップ=1枚扱い）</div>
-    <div class="countbar">
-      <button data-d="+2">+2</button>
-      <button data-d="+1">+1</button>
-      <button data-d="0">0</button>
-      <button data-d="-1">-1</button>
-      <button data-d="-2">-2</button>
-
-      <button id="undo" class="wide">Undo（1枚戻す）</button>
-    </div>
-
+ 
     <div class="legend">
       <div class="item"><b>+2</b><span class="muted"><code>4,5,6</code></span></div>
       <div class="item"><b>+1</b><span class="muted"><code>2,3,7</code></span></div>
@@ -484,4 +484,5 @@
   render();
 </script>
 </body>
+
 </html>
